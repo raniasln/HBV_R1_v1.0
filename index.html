@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Auslaufverhalten eines Behälters bei unterschiedlichem Innendruck</title>
+
+<style>
+    :root {
+        --bg: #f7f7f7;
+        --line: #444;
+        --tank-fill: #6fb6ff;
+        --tank-fill-dark: #3f8fe0;
+        --gas: #eeeeee;
+        --wall: #d9d9d9;
+        --wall-dark: #8a8a8a;
+        --water: #2d8df0;
+        --water-light: #8fd0ff;
+        --danger: #d94444;
+        --text: #222;
+        --button-bg: #ffffff;
+        --button-active: #1e88e5;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+    }
+
+    .page {
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 24px;
+    }
+
+    h1 {
+        font-size: 24px;
+        margin: 0 0 8px 0;
+        font-weight: 700;
+        text-align: center;
+    }
+
+    .subtitle {
+        font-size: 15px;
+        margin-bottom: 18px;
+        color: #555;
+        text-align: center;
+        max-width: 900px;
+        line-height: 1.4;
+    }
+
+    .controls {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .pressure-button {
+        border: 2px solid var(--button-active);
+        background: var(--button-bg);
+        color: var(--button-active);
+        padding: 10px 18px;
+        border-radius: 999px;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        min-width: 110px;
+    }
+
+    .pressure-button:hover {
+        background: #e8f3ff;
+    }
+
+    .pressure-button.active {
+        background: var(--button-active);
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(30, 136, 229, 0.28);
+    }
+
+    .stage-wrap {
+        width: min(1200px, 100%);
+        background: #ffffff;
+        border: 1px solid #ddd;
+        border-radius: 18px;
+        padding: 16px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+
+    svg {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: linear-gradient(to bottom, #ffffff, #f6f6f6);
+        border-radius: 14px;
+    }
+
+    .label {
+        font-size: 18px;
+        fill: #222;
+        font-weight: 700;
+    }
+
+    .small-label {
+        font-size: 14px;
+        fill: #333;
+    }
+
+    .tiny-label {
+        font-size: 12px;
+        fill: #333;
+    }
+
+    .info-panel {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+
+    .info-card {
+        border: 1px solid #ddd;
+        background: #fafafa;
+        border-radius: 12px;
+        padding: 12px;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    .info-card strong {
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .jet-path {
+        fill: none;
+        stroke: var(--water);
+        stroke-width: 8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: url(#waterShadow);
+        stroke-dasharray: 18 16;
+        animation: flowDash 0.8s linear infinite;
+    }
+
+    .jet-path-light {
+        fill: none;
+        stroke: rgba(255,255,255,0.55);
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 10 24;
+        animation: flowDashLight 0.65s linear infinite;
+    }
+
+    @keyframes flowDash {
+        from {
+            stroke-dashoffset: 0;
+        }
+        to {
+            stroke-dashoffset: -68;
+        }
+    }
+
+    @keyframes flowDashLight {
+        from {
+            stroke-dashoffset: 0;
+        }
+        to {
+            stroke-dashoffset: -80;
+        }
+    }
+
+    .drop {
+        fill: var(--water);
+        opacity: 0.9;
+        filter: url(#waterShadow);
+    }
+
+    .drop-light {
+        fill: var(--water-light);
+        opacity: 0.75;
+    }
+
+    .spray {
+        animation: sprayPulse 0.55s ease-in-out infinite alternate;
+    }
+
+    @keyframes sprayPulse {
+        from {
+            opacity: 0.35;
+            transform: scale(0.96);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1.04);
+        }
+    }
+
+    .water-surface {
+        animation: surfaceWave 2.2s ease-in-out infinite;
+    }
+
+    @keyframes surfaceWave {
+        0% {
+            transform: translateY(0);
+        }
+        50% {
+            transform: translateY(2px);
+        }
+        100% {
+            transform: translateY(0);
+        }
+    }
+
+    .needle {
+        transform-origin: 760px 212px;
+        transition: transform 0.55s ease;
+    }
+
+    .pressure-value {
+        font-size: 17px;
+        fill: #111;
+        font-weight: 700;
+    }
+
+    .tank-outline {
+        stroke: var(--line);
+        stroke-width: 4;
+        fill: none;
+    }
+
+    .hidden {
+        display: none;
+    }
+
+    @media (max-width: 800px) {
+        .info-panel {
+            grid-template-columns: 1fr;
+        }
+
+        h1 {
+            font-size: 20px;
+        }
+    }
+</style>
+</head>
+
+<body>
+
+<div class="page">
+
+    <h1>Auslaufverhalten eines Behälters</h1>
+
+    <div class="subtitle">
+        Vergleich des Wasserstrahls bei drei Innendrücken:
+        drucklos, 0,5 bar und 2,5 bar. Der Strahl tritt zunächst horizontal aus
+        und folgt anschließend einer parabelförmigen Flugbahn nach unten.
+    </div>
+
+    <div class="controls">
+        <button class="pressure-button active" data-pressure="0">0 bar</button>
+        <button class="pressure-button" data-pressure="0.5">0,5 bar</button>
+        <button class="pressure-button" data-pressure="2.5">2,5 bar</button>
+    </div>
+
+    <div class="stage-wrap">
+
+        <svg viewBox="0 0 1100 720" role="img" aria-label="Animation eines Tanks mit Leck und Wasserstrahl">
+            <defs>
+                <linearGradient id="waterGradient" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#8fd0ff"/>
+                    <stop offset="50%" stop-color="#5aa9f5"/>
+                    <stop offset="100%" stop-color="#367bd0"/>
+                </linearGradient>
+
+                <linearGradient id="gasGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#f4f4f4"/>
+                    <stop offset="100%" stop-color="#dddddd"/>
+                </linearGradient>
+
+                <linearGradient id="wallGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#eeeeee"/>
+                    <stop offset="100%" stop-color="#cfcfcf"/>
+                </linearGradient>
+
+                <filter id="waterShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#0069c9" flood-opacity="0.35"/>
+                </filter>
+
+                <clipPath id="tankClip">
+                    <rect x="150" y="90" width="360" height="500" rx="34" ry="34"/>
+                </clipPath>
+            </defs>
+
+            <!-- Hintergrund -->
+            <rect x="0" y="0" width="1100" height="720" fill="#ffffff"/>
+
+            <!-- Auffangwanne -->
+            <path
+                d="
+                M 40 628
+                L 40 375
+                L 84 375
+                L 84 555
+                Q 84 598 126 598
+                L 982 598
+                Q 1018 598 1018 558
+                L 1018 375
+                L 1062 375
+                L 1062 666
+                L 40 666
+                Z"
+                fill="url(#wallGradient)"
+                stroke="var(--wall-dark)"
+                stroke-width="4"
+            />
+
+            <!-- Bodenplatte / Sockel unter Tank -->
+            <rect x="168" y="588" width="325" height="14" fill="#bdbdbd" stroke="#777" stroke-width="2"/>
+
+            <!-- Tankkörper mit abgerundeten Ecken -->
+            <rect
+                x="150"
+                y="90"
+                width="360"
+                height="500"
+                rx="34"
+                ry="34"
+                fill="#f2f2f2"
+                stroke="none"
+            />
+
+            <!-- Tankfüllung / Wasser -->
+            <g clip-path="url(#tankClip)">
+                <rect
+                    id="waterFill"
+                    x="150"
+                    y="220"
+                    width="360"
+                    height="370"
+                    fill="url(#waterGradient)"
+                />
+
+                <!-- ruhige Wasseroberfläche -->
+                <path
+                    class="water-surface"
+                    d="M 150 220 C 210 216, 270 224, 330 220 C 390 216, 450 224, 510 220"
+                    fill="none"
+                    stroke="#95d7ff"
+                    stroke-width="4"
+                    opacity="0.85"
+                />
+
+                <!-- Gasraum -->
+                <rect
+                    x="150"
+                    y="90"
+                    width="360"
+                    height="130"
+                    fill="url(#gasGradient)"
+                    opacity="0.95"
+                />
+
+                <!-- Grenze Flüssigkeit/Gas -->
+                <line
+                    x1="150"
+                    y1="220"
+                    x2="510"
+                    y2="220"
+                    stroke="#444"
+                    stroke-width="2.5"
+                />
+            </g>
+
+            <!-- Tankkontur -->
+            <rect
+                x="150"
+                y="90"
+                width="360"
+                height="500"
+                rx="34"
+                ry="34"
+                class="tank-outline"
+            />
+
+            <!-- Leck / Öffnung -->
+            <circle
+                id="leakOpening"
+                cx="510"
+                cy="500"
+                r="10"
+                fill="#222"
+                stroke="#ffffff"
+                stroke-width="3"
+            />
+
+            <circle
+                cx="510"
+                cy="500"
+                r="5"
+                fill="#0d6fd1"
+            />
+
+            <!-- Beschriftung Tank -->
+            <text x="235" y="72" class="label">Behälter mit Wasser</text>
+            <text x="180" y="250" class="small-label" fill="#0b4f8a">Wasser</text>
+            <text x="185" y="150" class="small-label">Gasraum / Innendruck</text>
+
+            <!-- Manometer-Anschluss -->
+            <path
+                d="M 510 150 L 592 150 L 592 212 L 642 212"
+                fill="none"
+                stroke="#444"
+                stroke-width="7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            />
+
+            <!-- Manometer -->
+            <circle
+                cx="760"
+                cy="212"
+                r="82"
+                fill="#f9f9f9"
+                stroke="#333"
+                stroke-width="5"
+            />
+
+            <circle
+                cx="760"
+                cy="212"
+                r="68"
+                fill="#ffffff"
+                stroke="#cccccc"
+                stroke-width="2"
+            />
+
+            <!-- Manometer-Skala -->
+            <g id="gaugeTicks">
+                <line x1="710" y1="252" x2="700" y2="263" stroke="#333" stroke-width="3"/>
+                <line x1="725" y1="170" x2="711" y2="157" stroke="#333" stroke-width="3"/>
+                <line x1="760" y1="146" x2="760" y2="128" stroke="#333" stroke-width="3"/>
+                <line x1="795" y1="170" x2="809" y2="157" stroke="#333" stroke-width="3"/>
+                <line x1="810" y1="252" x2="820" y2="263" stroke="#333" stroke-width="3"/>
+            </g>
+
+            <text x="704" y="284" class="tiny-label">0</text>
+            <text x="715" y="148" class="tiny-label">0,5</text>
+            <text x="753" y="120" class="tiny-label">1</text>
+            <text x="804" y="148" class="tiny-label">2</text>
+            <text x="815" y="284" class="tiny-label">2,5</text>
+
+            <!-- Zeiger -->
+            <g id="needleGroup" class="needle">
+                <line
+                    x1="760"
+                    y1="212"
+                    x2="716"
+                    y2="252"
+                    stroke="#d32f2f"
+                    stroke-width="6"
+                    stroke-linecap="round"
+                />
+                <circle cx="760" cy="212" r="8" fill="#333"/>
+            </g>
+
+            <text x="710" y="317" class="small-label">Manometer</text>
+            <text id="pressureText" x="718" y="342" class="pressure-value">0 bar</text>
+
+            <!-- Wasserstrahl-Gruppe -->
+            <g id="jetGroup">
+
+                <!-- Pfad: wird per JS verändert -->
+                <path id="jetPathMain" class="jet-path" d="M 510 500 C 575 500, 610 515, 650 552"/>
+                <path id="jetPathLight" class="jet-path-light" d="M 510 500 C 575 500, 610 515, 650 552"/>
+
+                <!-- Tropfen entlang der Kurve -->
+                <g id="dropsGroup">
+                    <circle class="drop" cx="560" cy="502" r="5"/>
+                    <circle class="drop-light" cx="595" cy="512" r="3"/>
+                    <circle class="drop" cx="630" cy="538" r="4"/>
+                </g>
+
+                <!-- Sprühbereich direkt am Leck -->
+                <g class="spray" transform-origin="510 500">
+                    <circle cx="526" cy="498" r="3" fill="#8fd0ff"/>
+                    <circle cx="536" cy="501" r="2.5" fill="#2d8df0"/>
+                    <circle cx="546" cy="506" r="2" fill="#8fd0ff"/>
+                </g>
+
+            </g>
+
+            <!-- Aufprall / Wasser am Boden -->
+            <ellipse
+                id="splash"
+                cx="650"
+                cy="598"
+                rx="38"
+                ry="8"
+                fill="#5aa9f5"
+                opacity="0.55"
+            />
+
+            <g id="splashDrops" class="spray">
+                <circle cx="632" cy="588" r="3" fill="#8fd0ff"/>
+                <circle cx="650" cy="584" r="2.5" fill="#2d8df0"/>
+                <circle cx="671" cy="588" r="3" fill="#8fd0ff"/>
+            </g>
+
+            <!-- Erklärungspfeil Strahlrichtung -->
+            <text x="535" y="480" class="small-label">Leck</text>
+            <line x1="550" y1="488" x2="515" y2="500" stroke="#333" stroke-width="2"/>
+            <polygon points="515,500 528,491 529,506" fill="#333"/>
+
+            <!-- Aktueller Fall -->
+            <rect x="780" y="470" width="260" height="118" rx="14" fill="#f7f7f7" stroke="#cccccc" stroke-width="2"/>
+            <text x="802" y="500" class="label">Aktueller Fall</text>
+            <text id="caseTitle" x="802" y="532" class="small-label">Druckloser Behälter</text>
+            <text id="caseDescription" x="802" y="558" class="tiny-label">Kurzer Strahl durch hydrostatischen Druck</text>
+        </svg>
+
+        <div class="info-panel">
+            <div class="info-card">
+                <strong>0 bar</strong>
+                Der Behälter ist drucklos. Das Wasser tritt nur durch die Flüssigkeitssäule aus.
+                Der Strahl ist kurz und fällt schnell nach unten.
+            </div>
+
+            <div class="info-card">
+                <strong>0,5 bar</strong>
+                Durch leichten Überdruck steigt die Austrittsgeschwindigkeit.
+                Der Wasserstrahl reicht sichtbar weiter.
+            </div>
+
+            <div class="info-card">
+                <strong>2,5 bar</strong>
+                Bei höherem Innendruck tritt das Wasser deutlich schneller aus.
+                Die Flugbahn beginnt länger horizontal und erreicht eine größere Entfernung.
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    const pressureButtons = document.querySelectorAll(".pressure-button");
+
+    const needleGroup = document.getElementById("needleGroup");
+    const pressureText = document.getElementById("pressureText");
+    const jetPathMain = document.getElementById("jetPathMain");
+    const jetPathLight = document.getElementById("jetPathLight");
+    const dropsGroup = document.getElementById("dropsGroup");
+    const splash = document.getElementById("splash");
+    const splashDrops = document.getElementById("splashDrops");
+    const caseTitle = document.getElementById("caseTitle");
+    const caseDescription = document.getElementById("caseDescription");
+
+    /*
+        Koordinatensystem:
+        Leckpunkt: x = 510, y = 500
+        Der Wasserstrahl startet horizontal.
+        Danach fällt der Strahl durch die Schwerkraft parabelförmig nach unten.
+    */
+
+    const scenarios = {
+        "0": {
+            label: "0 bar",
+            title: "Druckloser Behälter",
+            description: "Kurzer Strahl durch hydrostatischen Druck",
+            needleAngle: 0,
+            path: "M 510 500 C 550 500, 590 516, 635 570",
+            lightPath: "M 510 500 C 550 500, 590 516, 635 570",
+            splashX: 635,
+            splashY: 598,
+            splashRx: 36,
+            drops: [
+                { x: 540, y: 501, r: 4.5, light: false },
+                { x: 572, y: 512, r: 3.5, light: true },
+                { x: 608, y: 546, r: 4.0, light: false }
+            ],
+            splashDrops: [
+                { x: 618, y: 589, r: 3 },
+                { x: 636, y: 585, r: 2.5 },
+                { x: 653, y: 589, r: 3 }
+            ],
+            dashSpeed: "1.15s",
+            dashLightSpeed: "0.9s"
+        },
+
+        "0.5": {
+            label: "0,5 bar",
+            title: "Leichter Überdruck",
+            description: "Weiterer Strahl durch 0,5 bar Innendruck",
+            needleAngle: 48,
+            path: "M 510 500 C 610 498, 690 520, 765 590",
+            lightPath: "M 510 500 C 610 498, 690 520, 765 590",
+            splashX: 765,
+            splashY: 598,
+            splashRx: 48,
+            drops: [
+                { x: 558, y: 500, r: 5, light: false },
+                { x: 620, y: 506, r: 3.5, light: true },
+                { x: 680, y: 528, r: 4.2, light: false },
+                { x: 728, y: 562, r: 3.5, light: true }
+            ],
+            splashDrops: [
+                { x: 740, y: 588, r: 3 },
+                { x: 765, y: 582, r: 2.7 },
+                { x: 790, y: 588, r: 3 },
+                { x: 778, y: 574, r: 2 }
+            ],
+            dashSpeed: "0.8s",
+            dashLightSpeed: "0.6s"
+        },
+
+        "2.5": {
+            label: "2,5 bar",
+            title: "Erhöhter Überdruck",
+            description: "Langer Strahl durch hohe Austrittsgeschwindigkeit",
+            needleAngle: 100,
+            path: "M 510 500 C 690 496, 835 525, 975 586",
+            lightPath: "M 510 500 C 690 496, 835 525, 975 586",
+            splashX: 975,
+            splashY: 598,
+            splashRx: 62,
+            drops: [
+                { x: 565, y: 499, r: 5, light: false },
+                { x: 650, y: 501, r: 3.8, light: true },
+                { x: 735, y: 512, r: 4.4, light: false },
+                { x: 820, y: 536, r: 3.8, light: true },
+                { x: 910, y: 568, r: 4.5, light: false }
+            ],
+            splashDrops: [
+                { x: 940, y: 588, r: 3 },
+                { x: 965, y: 580, r: 2.8 },
+                { x: 990, y: 586, r: 3 },
+                { x: 1010, y: 592, r: 2.5 },
+                { x: 980, y: 572, r: 2.2 }
+            ],
+            dashSpeed: "0.45s",
+            dashLightSpeed: "0.35s"
+        }
+    };
+
+    function setScenario(pressure) {
+        const scenario = scenarios[pressure];
+
+        pressureButtons.forEach(button => {
+            button.classList.toggle(
+                "active",
+                button.getAttribute("data-pressure") === pressure
+            );
+        });
+
+        pressureText.textContent = scenario.label;
+
+        /*
+            Der Zeiger startet links unten bei ca. 0 bar.
+            Die Rotation simuliert die Bewegung auf der Skala.
+        */
+        needleGroup.style.transform = `rotate(${scenario.needleAngle}deg)`;
+
+        jetPathMain.setAttribute("d", scenario.path);
+        jetPathLight.setAttribute("d", scenario.lightPath);
+
+        jetPathMain.style.animationDuration = scenario.dashSpeed;
+        jetPathLight.style.animationDuration = scenario.dashLightSpeed;
+
+        splash.setAttribute("cx", scenario.splashX);
+        splash.setAttribute("cy", scenario.splashY);
+        splash.setAttribute("rx", scenario.splashRx);
+
+        caseTitle.textContent = scenario.title;
+        caseDescription.textContent = scenario.description;
+
+        renderDrops(scenario.drops);
+        renderSplashDrops(scenario.splashDrops);
+    }
+
+    function renderDrops(drops) {
+        dropsGroup.innerHTML = "";
+
+        drops.forEach((drop, index) => {
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", drop.x);
+            circle.setAttribute("cy", drop.y);
+            circle.setAttribute("r", drop.r);
+            circle.setAttribute("class", drop.light ? "drop-light" : "drop");
+
+            /*
+                Kleine Phasenverschiebung, damit die Tropfen nicht zu statisch wirken.
+            */
+            circle.style.animation = `sprayPulse ${0.55 + index * 0.08}s ease-in-out infinite alternate`;
+            dropsGroup.appendChild(circle);
+        });
+    }
+
+    function renderSplashDrops(drops) {
+        splashDrops.innerHTML = "";
+
+        drops.forEach((drop, index) => {
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", drop.x);
+            circle.setAttribute("cy", drop.y);
+            circle.setAttribute("r", drop.r);
+            circle.setAttribute("fill", index % 2 === 0 ? "#8fd0ff" : "#2d8df0");
+            splashDrops.appendChild(circle);
+        });
+    }
+
+    pressureButtons.forEach(button => {
+        button.addEventListener("click", () => {
+            const pressure = button.getAttribute("data-pressure");
+            setScenario(pressure);
+        });
+    });
+
+    setScenario("0");
+</script>
+
+</body>
+</html>
